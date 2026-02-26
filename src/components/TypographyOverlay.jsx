@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 /**
- * UI overlay — shows title and distance info.
+ * UI overlay — shows title, distance, and connection status.
  * On first load, text appears automatically then fades.
  * On subsequent touches, it reappears briefly.
  */
-export default function TypographyOverlay({ distance, isConnected }) {
-    const [visible, setVisible] = useState(true); // Start visible!
+export default function TypographyOverlay({ distance, isConnected, hasPartner }) {
+    const [visible, setVisible] = useState(true);
     const timerRef = useRef(null);
     const firstLoadRef = useRef(true);
 
@@ -24,7 +24,6 @@ export default function TypographyOverlay({ distance, isConnected }) {
     };
 
     useEffect(() => {
-        // Auto-show on first load, then fade after 4 seconds
         if (firstLoadRef.current) {
             firstLoadRef.current = false;
             timerRef.current = setTimeout(() => setVisible(false), 4000);
@@ -39,10 +38,15 @@ export default function TypographyOverlay({ distance, isConnected }) {
 
     // Format distance
     const formatDistance = (meters) => {
+        if (meters == null) return null;
         if (meters < 1000) return `${Math.round(meters)}m away`;
         if (meters < 100000) return `${(meters / 1000).toFixed(1)}km away`;
         return `${Math.round(meters / 1000)}km away`;
     };
+
+    // Determine what to show in the distance area
+    const distanceText = formatDistance(distance);
+    const showWaiting = !hasPartner || distance == null;
 
     return (
         <div
@@ -88,7 +92,7 @@ export default function TypographyOverlay({ distance, isConnected }) {
             >
                 <div
                     style={{
-                        fontSize: 'clamp(28px, 6vw, 48px)',
+                        fontSize: showWaiting ? 'clamp(20px, 4.5vw, 32px)' : 'clamp(28px, 6vw, 48px)',
                         fontWeight: 400,
                         fontStyle: 'italic',
                         color: 'rgba(255, 220, 130, 0.9)',
@@ -96,7 +100,7 @@ export default function TypographyOverlay({ distance, isConnected }) {
                         marginBottom: '8px',
                     }}
                 >
-                    {formatDistance(distance)}
+                    {showWaiting ? 'Thinking of you...' : distanceText}
                 </div>
                 <div
                     style={{
@@ -104,12 +108,19 @@ export default function TypographyOverlay({ distance, isConnected }) {
                         fontWeight: 300,
                         letterSpacing: '0.2em',
                         color: isConnected
-                            ? 'rgba(180, 255, 180, 0.6)'
+                            ? hasPartner
+                                ? 'rgba(180, 255, 180, 0.6)'
+                                : 'rgba(255, 220, 150, 0.5)'
                             : 'rgba(255, 200, 150, 0.5)',
                         textTransform: 'uppercase',
                     }}
                 >
-                    {isConnected ? '● connected' : '○ dreaming'}
+                    {isConnected
+                        ? hasPartner
+                            ? '● connected'
+                            : '○ waiting for her'
+                        : '○ dreaming'
+                    }
                 </div>
             </div>
         </div>

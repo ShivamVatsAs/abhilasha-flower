@@ -11,8 +11,8 @@ export function useHeartbeat(distance) {
     const timeRef = useRef(0);
 
     useFrame((_, delta) => {
-        if (distance > 1000) {
-            // Too far — no pulse, gracefully return to 1
+        if (distance == null || distance > 1000) {
+            // No partner or too far — no pulse, gracefully return to 1
             scaleRef.current += (1 - scaleRef.current) * 0.05;
             return;
         }
