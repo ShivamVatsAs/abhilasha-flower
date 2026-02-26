@@ -1,12 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 
 /**
- * Invisible UI overlay — text appears only on touch/click,
- * then fades out after a few seconds.
+ * UI overlay — shows title and distance info.
+ * On first load, text appears automatically then fades.
+ * On subsequent touches, it reappears briefly.
  */
 export default function TypographyOverlay({ distance, isConnected }) {
-    const [visible, setVisible] = useState(false);
+    const [visible, setVisible] = useState(true); // Start visible!
     const timerRef = useRef(null);
+    const firstLoadRef = useRef(true);
 
     const handleInteraction = () => {
         setVisible(true);
@@ -22,6 +24,12 @@ export default function TypographyOverlay({ distance, isConnected }) {
     };
 
     useEffect(() => {
+        // Auto-show on first load, then fade after 4 seconds
+        if (firstLoadRef.current) {
+            firstLoadRef.current = false;
+            timerRef.current = setTimeout(() => setVisible(false), 4000);
+        }
+
         window.addEventListener('pointerdown', handleInteraction);
         return () => {
             window.removeEventListener('pointerdown', handleInteraction);

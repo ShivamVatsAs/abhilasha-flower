@@ -2,9 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
-
-// Mobile detection
-const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+import { isMobile, isLowEnd } from '../lib/deviceDetect';
 
 /**
  * Photorealistic sunflower using texture-mapped petals
@@ -26,7 +24,7 @@ function createPetalShape() {
 
 function createCurvedPetalGeometry(petalShape, ring) {
     const extrudeSettings = isMobile
-        ? { depth: 0.008, bevelEnabled: false, curveSegments: 4 }
+        ? { depth: 0.008, bevelEnabled: false, curveSegments: 3 }
         : {
             depth: 0.008,
             bevelEnabled: true,
@@ -79,11 +77,19 @@ function Petal({ index, total, ring, ringRadius, timeOffset, heartbeatScale, pet
     const randomDroop = useMemo(() => (Math.random() - 0.5) * 0.12, []);
     const randomTwist = useMemo(() => (Math.random() - 0.5) * 0.06, []);
 
-    // Slight hue shift per petal for natural variation
-    const hueShift = useMemo(() => (Math.random() - 0.5) * 0.06, []);
+    // Frame counter for throttling on mobile (animate every other frame)
+    const frameCountRef = useRef(0);
 
     useFrame((state) => {
         if (!meshRef.current) return;
+
+        // Throttle animation on mobile: update every 2nd frame (low-end: every 3rd)
+        if (isMobile) {
+            frameCountRef.current++;
+            const skipFrames = isLowEnd ? 3 : 2;
+            if (frameCountRef.current % skipFrames !== 0) return;
+        }
+
         const t = state.clock.elapsedTime + timeOffset;
 
         const windStrength = 0.012 + ring * 0.006;
@@ -99,16 +105,42 @@ function Petal({ index, total, ring, ringRadius, timeOffset, heartbeatScale, pet
         }
     });
 
-    // Clone texture so each petal can have independent settings
-    const clonedTexture = useMemo(() => {
+    // On mobile, share the same texture instance (no cloning) — saves memory
+    const material = useMemo(() => {
+        if (isMobile) {
+            return (
+                <meshStandardMaterial
+                    map={petalTexture}
+                    roughness={0.5}
+                    metalness={0.0}
+                    side={THREE.DoubleSide}
+                    emissive="#FFB300"
+                    emissiveIntensity={0.06}
+                />
+            );
+        }
+
+        // Desktop: clone texture for per-petal variation
         if (!petalTexture) return null;
         const t = petalTexture.clone();
         t.needsUpdate = true;
-        // Rotate texture slightly per petal for variation
+        const hueShift = (Math.random() - 0.5) * 0.06;
         t.rotation = hueShift * 0.3;
         t.center.set(0.5, 0.5);
-        return t;
-    }, [petalTexture, hueShift]);
+
+        return (
+            <meshStandardMaterial
+                map={t}
+                roughness={0.45}
+                metalness={0.0}
+                side={THREE.DoubleSide}
+                emissive="#FFB300"
+                emissiveIntensity={0.04}
+                transparent
+                alphaTest={0.1}
+            />
+        );
+    }, [petalTexture]);
 
     return (
         <mesh
@@ -122,49 +154,49 @@ function Petal({ index, total, ring, ringRadius, timeOffset, heartbeatScale, pet
             rotation={[baseTilt + randomDroop, -angle + Math.PI / 2, randomTwist]}
             scale={[petalLength, petalLength, 1]}
         >
-            <meshStandardMaterial
-                map={clonedTexture}
-                roughness={0.45}
-                metalness={0.0}
-                side={THREE.DoubleSide}
-                emissive="#FFB300"
-                emissiveIntensity={0.04}
-                transparent
-                alphaTest={0.1}
-            />
+            {material}
         </mesh>
     );
 }
 
 function CenterDisc({ discTexture }) {
     const meshRef = useRef();
+    const frameCountRef = useRef(0);
 
     useFrame((state) => {
         if (!meshRef.current) return;
+        // Throttle rotation on mobile
+        if (isMobile) {
+            frameCountRef.current++;
+            if (frameCountRef.current % 2 !== 0) return;
+        }
         meshRef.current.rotation.y = state.clock.elapsedTime * 0.015;
     });
+
+    const segments = isMobile ? 20 : 32;
+    const sphereDetail = isMobile ? [0.20, 16, 10] : [0.20, 24, 16];
 
     return (
         <group ref={meshRef}>
             {/* Main disc with texture */}
             <mesh position={[0, 0.06, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[0.30, 0.33, 0.08, 32]} />
+                <cylinderGeometry args={[0.30, 0.33, 0.08, segments]} />
                 <meshStandardMaterial
                     map={discTexture}
                     roughness={0.9}
                     metalness={0.02}
-                    bumpMap={discTexture}
+                    bumpMap={isMobile ? null : discTexture}
                     bumpScale={0.04}
                 />
             </mesh>
             {/* Raised center dome for 3D effect */}
             <mesh position={[0, 0.11, 0]}>
-                <sphereGeometry args={[0.20, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2.5]} />
+                <sphereGeometry args={[...sphereDetail, 0, Math.PI * 2, 0, Math.PI / 2.5]} />
                 <meshStandardMaterial
                     map={discTexture}
                     roughness={0.92}
                     metalness={0.03}
-                    bumpMap={discTexture}
+                    bumpMap={isMobile ? null : discTexture}
                     bumpScale={0.05}
                 />
             </mesh>
@@ -186,7 +218,7 @@ function Stem() {
 
     const geometry = useMemo(() => {
         if (isMobile) {
-            return new THREE.TubeGeometry(curve, 16, 0.045, 6, false);
+            return new THREE.TubeGeometry(curve, 12, 0.045, 5, false);
         }
 
         try {
@@ -242,7 +274,7 @@ function Stem() {
             return geom;
         } catch (e) {
             console.warn('[Sunflower] Tapered stem failed, falling back:', e);
-            return new THREE.TubeGeometry(curve, 16, 0.045, 6, false);
+            return new THREE.TubeGeometry(curve, 12, 0.045, 5, false);
         }
     }, [curve]);
 
@@ -274,6 +306,7 @@ function Leaf({ side, yPos }) {
             bevelThickness: 0.002,
             bevelSize: 0.003,
             bevelSegments: 1,
+            curveSegments: isMobile ? 3 : undefined,
         });
 
         if (!isMobile) {
@@ -293,8 +326,15 @@ function Leaf({ side, yPos }) {
     }, [leafShape]);
 
     const meshRef = useRef();
+    const frameCountRef = useRef(0);
+
     useFrame((state) => {
         if (!meshRef.current) return;
+        // Throttle on mobile
+        if (isMobile) {
+            frameCountRef.current++;
+            if (frameCountRef.current % 3 !== 0) return;
+        }
         const t = state.clock.elapsedTime;
         meshRef.current.rotation.z = side * 0.3 + Math.sin(t * 0.35 + yPos) * 0.04;
     });
@@ -313,14 +353,16 @@ function Leaf({ side, yPos }) {
                     side={THREE.DoubleSide}
                 />
             </mesh>
-            {/* Center vein */}
-            <mesh
-                position={[0, 0.3, 0.006]}
-                scale={[0.6, 0.6, 1]}
-            >
-                <cylinderGeometry args={[0.003, 0.002, 0.55, 4]} />
-                <meshStandardMaterial color="#2A5A18" roughness={0.7} />
-            </mesh>
+            {/* Center vein — skip on low-end */}
+            {!isLowEnd && (
+                <mesh
+                    position={[0, 0.3, 0.006]}
+                    scale={[0.6, 0.6, 1]}
+                >
+                    <cylinderGeometry args={[0.003, 0.002, 0.55, 4]} />
+                    <meshStandardMaterial color="#2A5A18" roughness={0.7} />
+                </mesh>
+            )}
         </group>
     );
 }
@@ -329,43 +371,63 @@ export default function Sunflower({ heartbeatScale }) {
     // Load textures using drei's useTexture (handles caching and loading)
     const [petalTexture, discTexture] = useTexture(['/petal.png', '/disc.png']);
 
-    // Configure petal texture
+    // Configure textures
     useMemo(() => {
         petalTexture.wrapS = THREE.ClampToEdgeWrapping;
         petalTexture.wrapT = THREE.ClampToEdgeWrapping;
         petalTexture.colorSpace = THREE.SRGBColorSpace;
-        petalTexture.generateMipmaps = true;
-        petalTexture.minFilter = THREE.LinearMipmapLinearFilter;
-        petalTexture.magFilter = THREE.LinearFilter;
+
+        if (isMobile) {
+            // Simpler filtering on mobile — saves GPU bandwidth
+            petalTexture.generateMipmaps = false;
+            petalTexture.minFilter = THREE.LinearFilter;
+            petalTexture.magFilter = THREE.LinearFilter;
+        } else {
+            petalTexture.generateMipmaps = true;
+            petalTexture.minFilter = THREE.LinearMipmapLinearFilter;
+            petalTexture.magFilter = THREE.LinearFilter;
+        }
 
         discTexture.wrapS = THREE.RepeatWrapping;
         discTexture.wrapT = THREE.RepeatWrapping;
         discTexture.colorSpace = THREE.SRGBColorSpace;
+
+        if (isMobile) {
+            discTexture.generateMipmaps = false;
+            discTexture.minFilter = THREE.LinearFilter;
+        }
     }, [petalTexture, discTexture]);
 
     const petalRings = useMemo(() => {
         const rings = [];
 
-        // Inner ring — 13 petals
-        for (let i = 0; i < 13; i++) {
-            rings.push({ index: i, total: 13, ring: 0, ringRadius: 0.33, timeOffset: i * 0.2 });
-        }
-        // Middle ring — 21 petals (skip on mobile for perf)
-        if (!isMobile) {
+        if (isLowEnd) {
+            // Ultra-light: just 2 rings, fewer petals
+            for (let i = 0; i < 10; i++) {
+                rings.push({ index: i, total: 10, ring: 0, ringRadius: 0.33, timeOffset: i * 0.2 });
+            }
+            for (let i = 0; i < 16; i++) {
+                rings.push({ index: i, total: 16, ring: 1, ringRadius: 0.42, timeOffset: i * 0.12 + 1 });
+            }
+        } else if (isMobile) {
+            // Mobile: 2 rings, moderate petal count
+            for (let i = 0; i < 13; i++) {
+                rings.push({ index: i, total: 13, ring: 0, ringRadius: 0.33, timeOffset: i * 0.2 });
+            }
+            for (let i = 0; i < 21; i++) {
+                rings.push({ index: i, total: 21, ring: 1, ringRadius: 0.42, timeOffset: i * 0.1 + 1 });
+            }
+        } else {
+            // Desktop: full 3 rings
+            for (let i = 0; i < 13; i++) {
+                rings.push({ index: i, total: 13, ring: 0, ringRadius: 0.33, timeOffset: i * 0.2 });
+            }
             for (let i = 0; i < 21; i++) {
                 rings.push({ index: i, total: 21, ring: 1, ringRadius: 0.40, timeOffset: i * 0.15 + 1 });
             }
-        }
-        // Outer ring
-        const outerCount = isMobile ? 21 : 34;
-        for (let i = 0; i < outerCount; i++) {
-            rings.push({
-                index: i,
-                total: outerCount,
-                ring: isMobile ? 1 : 2,
-                ringRadius: isMobile ? 0.42 : 0.48,
-                timeOffset: i * 0.1 + 2,
-            });
+            for (let i = 0; i < 34; i++) {
+                rings.push({ index: i, total: 34, ring: 2, ringRadius: 0.48, timeOffset: i * 0.1 + 2 });
+            }
         }
 
         return rings;
@@ -389,10 +451,10 @@ export default function Sunflower({ heartbeatScale }) {
             {/* Stem */}
             <Stem />
 
-            {/* Leaves */}
+            {/* Leaves — only 2 on low-end */}
             <Leaf side={1} yPos={-1.2} />
             <Leaf side={-1} yPos={-2.0} />
-            <Leaf side={1} yPos={-2.8} />
+            {!isLowEnd && <Leaf side={1} yPos={-2.8} />}
         </group>
     );
 }
