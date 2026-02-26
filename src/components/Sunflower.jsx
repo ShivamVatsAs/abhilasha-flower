@@ -116,6 +116,8 @@ function Petal({ index, total, ring, ringRadius, timeOffset, heartbeatScale, pet
                     side={THREE.DoubleSide}
                     emissive="#FFB300"
                     emissiveIntensity={0.06}
+                    transparent
+                    alphaTest={0.1}
                 />
             );
         }

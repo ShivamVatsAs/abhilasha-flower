@@ -387,7 +387,7 @@ export default function Scene() {
                     powerPreference: isMobile ? 'low-power' : 'high-performance',
                     failIfMajorPerformanceCaveat: false,
                     // Limit precision on mobile to help GPU
-                    precision: isMobile ? 'mediump' : 'highp',
+                    precision: 'highp',
                 }}
                 dpr={[1, safeDpr]}
                 style={{
