@@ -139,7 +139,7 @@ function SceneContent() {
             {/* Main directional light matching sun position */}
             <directionalLight
                 position={sunPosition}
-                intensity={2.5}
+                intensity={2.8}
                 color="#FFD080"
                 castShadow={false}
                 shadow-mapSize={[512, 512]}
@@ -159,7 +159,7 @@ function SceneContent() {
             {!isLowEnd && (
                 <pointLight
                     position={[-3, 4, -5]}
-                    intensity={1.5}
+                    intensity={2.2}
                     color="#FF8C00"
                     distance={20}
                     decay={2}
@@ -382,7 +382,7 @@ export default function Scene() {
                 gl={{
                     antialias: !isMobile,
                     toneMapping: THREE.ACESFilmicToneMapping,
-                    toneMappingExposure: 1.2,
+                    toneMappingExposure: 1.35,
                     outputColorSpace: THREE.SRGBColorSpace,
                     powerPreference: isMobile ? 'low-power' : 'high-performance',
                     failIfMajorPerformanceCaveat: false,
